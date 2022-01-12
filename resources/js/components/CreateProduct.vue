@@ -24,7 +24,7 @@
                         <h6 class="m-0 font-weight-bold text-primary">Media</h6>
                     </div>
                     <div class="card-body border">
-                        <vue-dropzone ref="myVueDropzone" id="dropzone" :options="dropzoneOptions"></vue-dropzone>
+                        <vue-dropzone ref="myVueDropzone" @vdropzone-success="fileUploaded" id="dropzone" :options="dropzoneOptions"></vue-dropzone>
                     </div>
                 </div>
             </div>
@@ -35,13 +35,12 @@
                         <h6 class="m-0 font-weight-bold text-primary">Variants</h6>
                     </div>
                     <div class="card-body">
-                        <div class="row" v-for="(item,index) in product_variant">
+                        <div class="row" v-for="(item,index) in product_variant" :key="index">
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label for="">Option</label>
                                     <select v-model="item.option" class="form-control">
-                                        <option v-for="variant in variants"
-                                                :value="variant.id">
+                                        <option v-for="variant, vkey in variants" :value="variant.id" :key="vkey">
                                             {{ variant.title }}
                                         </option>
                                     </select>
@@ -74,7 +73,7 @@
                                 </tr>
                                 </thead>
                                 <tbody>
-                                <tr v-for="variant_price in product_variant_prices">
+                                <tr v-for="variant_price, ksvr in product_variant_prices" :key="ksvr">
                                     <td>{{ variant_price.title }}</td>
                                     <td>
                                         <input type="text" class="form-control" v-model="variant_price.price">
@@ -91,8 +90,13 @@
             </div>
         </div>
 
+        <div class="alert alert-primary" v-if="loading">
+            Please wait, process is preparing for store this product.
+        </div>
+
         <button @click="saveProduct" type="submit" class="btn btn-lg btn-primary">Save</button>
         <button type="button" class="btn btn-secondary btn-lg">Cancel</button>
+        <alert v-model="alertCard.status" :title="alertCard.title" :type="alertCard.type" :message="alertCard.message" :items="alertCard.items"/>
     </section>
 </template>
 
@@ -114,6 +118,14 @@ export default {
     },
     data() {
         return {
+            loading: false,
+            alertCard: {
+                status: false,
+                type: 'success',
+                title: 'Title',
+                message: 'Message',
+                items: [],
+            },
             product_name: '',
             product_sku: '',
             description: '',
@@ -133,14 +145,15 @@ export default {
             }
         }
     },
+    created(){
+        // console.log(this.variants);
+    },
     methods: {
         // it will push a new object into product variant
         newVariant() {
             let all_variants = this.variants.map(el => el.id)
             let selected_variants = this.product_variant.map(el => el.option);
             let available_variants = all_variants.filter(entry1 => !selected_variants.some(entry2 => entry1 == entry2))
-            // console.log(available_variants)
-
             this.product_variant.push({
                 option: available_variants[0],
                 tags: []
@@ -153,8 +166,7 @@ export default {
             this.product_variant_prices = [];
             this.product_variant.filter((item) => {
                 tags.push(item.tags);
-            })
-
+            });
             this.getCombn(tags).forEach(item => {
                 this.product_variant_prices.push({
                     title: item,
@@ -187,21 +199,60 @@ export default {
                 product_variant: this.product_variant,
                 product_variant_prices: this.product_variant_prices
             }
-
-
+            this.loading = true;
             axios.post('/product', product).then(response => {
-                console.log(response.data);
+                let data = response.data;
+                this.loading = false;
+                if(data.status == false){
+                    this.showAlert({
+                        type: 'error',
+                        title: 'What\'s wrong!',
+                        message: data.message,
+                        validator: data.validator ?? true,
+                        items: data.errors ?? [],
+                    });
+                }else{
+                    this.showAlert({
+                        type: 'success',
+                        title: 'Product Stored',
+                        message: data.message,
+                        validator: true,
+                        items: [],
+                    });
+                    this.product_name = null;
+                    this.product_sku = null;
+                    this.description = null;
+                    this.product_variant_prices = [];
+                    this.product_image = [];
+                    this.product_variant = [
+                        {
+                            option: this.variants[0].id,
+                            tags: []
+                        }
+                    ];
+                }
             }).catch(error => {
+                this.loading = false;
                 console.log(error);
             })
-
-            console.log(product);
+        },
+        fileUploaded(file, response){
+            this.images.push({
+                url: file.dataURL,
+                type: file.type,
+                name: file.name,
+            });
+        },
+        showAlert(array){
+            this.alertCard.type = array.type;
+            this.alertCard.title = array.title;
+            this.alertCard.message = array.message;
+            this.alertCard.items = array.items;
+            this.alertCard.status = true;
         }
-
-
     },
     mounted() {
-        console.log('Component mounted.')
+        // console.log('Component mounted.')
     }
 }
 </script>
